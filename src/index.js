@@ -1,87 +1,71 @@
 import './sass/main.scss';
-import debounce from 'lodash.debounce';
-import photoMarkup from './photoMarkup.hbs';
+import NewApiService from './js/apiService.js';
+import cards from './templates/cards.hbs';
 
-const searchFormRef = document.querySelector('input');
-const galleryRef = document.querySelector('.gallery');
-const loadMoreBtnRef = document.querySelector('[data-action="load more"]');
-loadMoreBtnRef.disabled = true;
+import * as basicLightbox from 'basiclightbox';
+import 'basiclightbox/src/styles/main.scss';
 
-const queryStringParam = {
-  KEY: '24204810-4c4e56177cf5555097dc8a654',
-  page: 1,
-  LINK: 'https://pixabay.com/api/?image_type=photo&orientation=horizontal&q=',
-  resetPage() {
-    this.page = 1;
-  },
-  pageIncrement() {
-    this.page += 1;
-  },
+import { pnotifyError, pnotifyAlert } from './js/allert';
+
+const refs = {
+  gallery: document.querySelector('.gallery'),
+  searchForm: document.querySelector('.search-form'),
+  loadMoreBtn: document.querySelector('.load-more'),
 };
 
-searchFormRef.addEventListener('input', debounce(onSearch, 500));
+const newApiService = new NewApiService();
 
-searchFormRef.addEventListener('keydown', e => {
-  if (e.which === 13) e.preventDefault();
-});
+refs.searchForm.addEventListener('submit', onClickForm);
+refs.loadMoreBtn.addEventListener('click', onLoadMore);
+refs.gallery.addEventListener('click', runShow);
 
-loadMoreBtnRef.addEventListener('click', onBtnClick);
+function onClickForm(e) {
+  e.preventDefault();
 
-function onSearch(event) {
-  if (event.target.value.trim() === '') {
-    loadMoreBtnRef.disabled = true;
-    clearMarkup();
-    return;
+  clearGallery();
+  newApiService.query = e.currentTarget.elements.query.value;
+  if (newApiService.query === '') {
+    return pnotifyError();
   }
-  clearMarkup();
-  queryStringParam.resetPage();
-  return fetchImage(event)
-    .then(renderMarkup)
-    .catch(error => console.log(error));
+  newApiService.resetPage();
+  newApiService.gatePage().then(renderGalery);
 }
 
-async function onBtnClick() {
-  queryStringParam.pageIncrement();
-  await fetchImageOnBtnClick()
-    .then(renderMarkup)
-    .catch(error => console.log(error));
-
-  scroll();
-  
+function onLoadMore() {
+  newApiService.gatePage().then(renderGalery);
 }
 
-function fetchImage(event) {
-  loadMoreBtnRef.disabled = false;
-  return fetch(
-    `${queryStringParam.LINK}${event.target.value}&page=${queryStringParam.page}&per_page=12&key=${queryStringParam.KEY}`,
-  )
-    .then(data => data.json())
-    .then(data => data.hits);
+function renderGalery(card) {
+  if (card.length > 11) {
+    refs.loadMoreBtn.classList.remove('is-hidden');
+  } else {
+    refs.loadMoreBtn.classList.add('is-hidden');
+    pnotifyAlert();
+  }
+
+  refs.gallery.insertAdjacentHTML('beforeend', cards(card));
+  scrollInto();
 }
 
-function fetchImageOnBtnClick() {
-  return fetch(
-    `${queryStringParam.LINK}${searchFormRef.value}&page=${queryStringParam.page}&per_page=12&key=${queryStringParam.KEY}`,
-  )
-    .then(data => data.json())
-    .then(data => data.hits);
+function clearGallery() {
+  refs.gallery.innerHTML = '';
 }
 
-function renderMarkup(markup) {
-  galleryRef.insertAdjacentHTML('beforeend', photoMarkup(markup));
-}
-
-function clearMarkup() {
-  galleryRef.innerHTML = '';
-}
-
-function scroll(index) {
-  const images = document.querySelectorAll('li');
-  const newImageIndex = document.querySelectorAll('li').length;
-  const element = images[newImageIndex-11];
-
-  element.scrollIntoView({
+function scrollInto() {
+  refs.loadMoreBtn.scrollIntoView({
     behavior: 'smooth',
     block: 'end',
   });
+}
+
+function runShow(e) {
+  const instance = basicLightbox.create(`
+   <div class="modal">
+        <img src='${e.target.dataset.src}' class='modal__img'></img>
+    </div>
+`);
+
+  if (e.target.tagName === 'IMG') {
+    instance.show();
+  }
 }
